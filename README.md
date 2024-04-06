@@ -1,9 +1,9 @@
--: Project Goal :- 
+Project Goal :- 
 Using electric vehicle (EV) registration information and demographic survey data, we will examine patterns and predictors of EV adoption in the state of Texas. 
 We may also incorporate an analysis of EV charging station locations at a local level to determine if the patterns of EV adoption align with the distribution of EV charging stations in Austin.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
--: Data :-
+Data :-
 Our primary data sources will be the State EV Registration Database from EV Hub and the American Community Survey (ACS). We will limit the scope of our analysis to the state of Texas.
 The State EV Registration Database comprises 1,048,575 observations for the state of Texas.
 
