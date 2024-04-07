@@ -10,21 +10,25 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## R Markdown
+Data Exploration File
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+library(caTools)
+set.seed(123)
+ev_data = read.csv("ev_adoption_data.csv")
+head(ev_data)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
 
-```{r cars}
-summary(cars)
-```
+# training data
+ev_train = subset(ev_data, split==TRUE)
 
-## Including Plots
+# testing data
+ev_test = subset(ev_data, split == FALSE)
 
-You can also embed plots, for example:
+#scatterplot
+cor(subset(ev_train, select = -c(ZIPCODE,AVG_HHSZ_OWNER,AVG_HHSZ_RENTER,TP_SEX_RATIO, TP_MED_AGE,TP_18Y_OVR_SXRATIO, TP_65Y_OVR_SXRATIO) ))
 
-```{r pressure, echo=FALSE}
-plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
