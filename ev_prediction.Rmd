@@ -26,9 +26,16 @@ ev_train = subset(ev_data, split==TRUE)
 # testing data
 ev_test = subset(ev_data, split == FALSE)
 
-#scatterplot
+#correlation matrix
 cor(subset(ev_train, select = -c(ZIPCODE,AVG_HHSZ_OWNER,AVG_HHSZ_RENTER,TP_SEX_RATIO, TP_MED_AGE,TP_18Y_OVR_SXRATIO, TP_65Y_OVR_SXRATIO) ))
 
+#multiple linear regression to investigate the relationship between the total number of electric vehicle (EV) registrations (total_ev_count) within each ZIP code and various other demographic and socioeconomic variables. This model aims to identify which factors are significant predictors of EV adoption rates across different ZIP codes.
+lm_model <- lm(total_ev_count ~ . - AVG_HHSZ_OWNER - AVG_HHSZ_RENTER - TP_SEX_RATIO - TP_MED_AGE - TP_18Y_OVR_SXRATIO - TP_65Y_OVR_SXRATIO, data = ev_train)
+summary(lm_model)
+
+#residual plot
+plot(lm_model)
+summary(residuals(lm_auto))
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
