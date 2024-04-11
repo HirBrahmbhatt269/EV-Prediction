@@ -29,13 +29,92 @@ ev_test = subset(ev_data, split == FALSE)
 #correlation matrix
 cor(subset(ev_train, select = -c(ZIPCODE,AVG_HHSZ_OWNER,AVG_HHSZ_RENTER,TP_SEX_RATIO, TP_MED_AGE,TP_18Y_OVR_SXRATIO, TP_65Y_OVR_SXRATIO) ))
 
-#multiple linear regression to investigate the relationship between the total number of electric vehicle (EV) registrations (total_ev_count) within each ZIP code and various other demographic and socioeconomic variables. This model aims to identify which factors are significant predictors of EV adoption rates across different ZIP codes.
-lm_model <- lm(total_ev_count ~ . - AVG_HHSZ_OWNER - AVG_HHSZ_RENTER - TP_SEX_RATIO - TP_MED_AGE - TP_18Y_OVR_SXRATIO - TP_65Y_OVR_SXRATIO, data = ev_train)
-summary(lm_model)
 
+```
+
+
+
+
+```{r}
+
+#multiple linear regression to investigate the relationship between the total number of electric vehicle (EV) registrations (total_ev_count) within each ZIP code and various other demographic and socioeconomic variables. Excluded variables with insufficient data and the individual "ZIPCODE" column This model aims to identify which factors are significant predictors of EV adoption rates across different ZIP codes.
+lm_model <- lm(total_ev_count ~ . - AVG_HHSZ_OWNER - AVG_HHSZ_RENTER - TP_SEX_RATIO - TP_MED_AGE - TP_18Y_OVR_SXRATIO - TP_65Y_OVR_SXRATIO - ZIPCODE, data = ev_train)
+summary(lm_model)
+```
+From this result, we can see that OCCU_NAT(p = 0.000857), INDUS_AGRI(p = 1.42e-05), OWNER_OCC(p = 3.95e-12), TP_62Y_OVR(p = 2.19e-05) have highest significant level. 
+GRAD_PRO(p = 0.002636 ) and TWO_VEHICLES(p= 0.001610) have second highest significant level.
+OCCU_SEV, OCCU_SA_OF, BACHE_DEG , TP_35Y_44Y, and TP_55Y_59Y have the third highest significant level.
+
+Except for GRAD_PRO(Graduate or professional degree) and TWO_VEHICLES(2 vehicles available) variables that have a positive impact on the EV_Adoption rate, all the other variables demonstrate significant levels having negative impact on the EV Adoption rate.
+
+Overall, we can see that the Occupation Category has the highest impact on general EV adoption rate(cuz it has highest # of variables that show significant difference.)
+
+
+
+
+```{r}
 #residual plot
 plot(lm_model)
 summary(residuals(lm_auto))
+```
+It seems we do have non-linear associations(the shape looks heteroscedasticity) and outliers.
+
+
+
+
+Try to transform variables to squareroot form.
+```{r}
+# List of variables to exclude (including response variable if it's part of ev_train)
+variables_to_exclude <- c("AVG_HHSZ_OWNER", "AVG_HHSZ_RENTER", "TP_SEX_RATIO", 
+                          "TP_MED_AGE", "TP_18Y_OVR_SXRATIO", "TP_65Y_OVR_SXRATIO", "ZIPCODE", "total_ev_count")
+
+# Create a subset of ev_train without the variables to exclude
+ev_train_subset <- ev_train[, !(names(ev_train) %in% variables_to_exclude)]
+
+# Apply the square root transformation to the independent variables in the subset
+ev_train_subset_sqrt <- data.frame(lapply(ev_train_subset, sqrt))
+
+# Add the response variable back in after transformations
+ev_train_subset_sqrt$total_ev_count <- ev_train$total_ev_count
+
+
+lm_model_sqrt <- lm(total_ev_count ~ ., data = ev_train_subset_sqrt)
+
+
+summary(lm_model_sqrt)
+
+
+```
+
+Try to transform variables to log form.
+```{r}
+# List of variables to exclude (including response variable if it's part of ev_train)
+variables_to_exclude <- c("AVG_HHSZ_OWNER", "AVG_HHSZ_RENTER", "TP_SEX_RATIO", 
+                          "TP_MED_AGE", "TP_18Y_OVR_SXRATIO", "TP_65Y_OVR_SXRATIO", "ZIPCODE", "total_ev_count")
+
+# Create a subset of ev_train without the variables to exclude
+ev_train_subset <- ev_train[, !(names(ev_train) %in% variables_to_exclude)]
+
+# Before applying log, make sure there are no zero or negative values as they are undefined for log transformation
+# Assuming all values in ev_train_subset are positive. If not, you need to add a small constant to avoid log(0)
+# For example: ev_train_subset + 1
+
+# Apply the log transformation to the independent variables in the subset
+ev_train_subset_log <- data.frame(lapply(ev_train_subset, function(x) log(x + 1)))  # Adding 1 to avoid log(0)
+
+# Add the response variable back in after transformations
+ev_train_subset_log$total_ev_count <- ev_train$total_ev_count
+
+
+lm_model_log <- lm(total_ev_count ~ ., data = ev_train_subset_log)
+
+
+summary(lm_model_log)
+
+
+
+
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
