@@ -1,0 +1,48 @@
+```{r}
+library(MASS)
+library(class)
+library(tidyverse)
+library(corrplot)
+library(ISLR2)
+library(e1071)
+
+set.seed(42)
+evadoption <- read.csv("/Users/shivachitta/Downloads/ev_adoption_data_final.csv")
+summary(evadoption)
+
+total_obs <- nrow(evadoption)
+train_prop <- 0.8
+train_size <- round(train_prop * total_obs)
+train_index <- sample(1:nrow(evadoption), train_size, replace = FALSE)
+training_set <- evadoption[train_index, ]
+test_set <- evadoption[-train_index, ]
+
+features_training <- training_set[, -112]
+features_test <- test_set[, -112]  
+
+target <- training_set$EV_ADOPT_RATE
+lda_model <- lda(features_training, target)
+print(lda_model$prior)
+
+# Print the group means
+print(lda_model$means)
+
+# Print the coefficients
+print(lda_model$scaling)
+
+# Print the standard deviations
+print(lda_model$svd)
+
+# Print the proportion of trace
+print(lda_model$svd^2 / sum(lda_model$svd^2))
+
+# Predict classes for the test dataset
+predicted_classes <- predict(lda_model, newdata = features_test)
+
+# Compare predicted classes with actual classes
+confusion_matrix <- table(predicted_classes$class, test_set$actual_class)
+print(confusion_matrix)
+
+dim(test_set)
+dim(training_set)
+```

@@ -1,0 +1,103 @@
+---
+title: "SVM"
+output: html_document
+date: "2024-04-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+library(corrr)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+
+ev_csv <- read.csv("ev_adoption_data_final.csv")
+# Check for the null values
+#colSums(is.na(ev_csv))
+
+
+# To find the median value of EV_ADOPT_RATE without zeros, a dataframe "ev_wo_zero" is created which contains only the non-zeros values of ev adoption rate. Now we will find the cutoff values for mean and median of this non-zero data.
+ev_wo_zero <- ev_csv[ev_csv$EV_ADOPT_RATE > 0, ]
+cutoff_med <- median(ev_wo_zero$EV_ADOPT_RATE)
+cutoff_mean <- mean(ev_wo_zero$EV_ADOPT_RATE)
+
+
+# med_ev_binary is a vector which has value "Low" if the ev adoption rate is more than median value of ev_wo_zero$EV_ADOPT_RATE
+med_ev_binary <- rep(0, dim(ev_csv)[1])
+med_ev_binary[ev_csv$EV_ADOPT_RATE >= cutoff_mean] = 1
+ev_median <- cbind(ev_csv, med_ev_binary)
+
+
+# Let's split the data into training and testing using stratified sampling
+set.seed(1234)
+train.indx <- createDataPartition(ev_median$EV_ADOPT_RATE, p = 0.8, list = FALSE)
+train_ev <- ev_median[train.indx, ]
+test_ev <- ev_median[-train.indx, ]
+
+
+# Only choose predictors for PCA
+train_predictors <- train_ev[, !names(train_ev) %in% c("EV_ADOPT_RATE", "med_ev_binary")]
+
+
+# Normalizing the data before PCA, we check for the column "ZIPCODE" as it's the only column without numeric data
+# Here, you can change the ev_median data set to training if you wanna do pca only using training data
+ev_numeric <- train_predictors[, sapply(train_predictors, is.numeric)]
+train_predictors_scaled <- scale(ev_numeric)
+
+
+ev.pca_result <- prcomp(train_predictors_scaled, scale. = FALSE, )
+#summary(ev.pca_result)
+fviz_screeplot(ev.pca_result)
+
+# Calculate variance explained by each PC
+#eigen_val <- ev.pca_result$sdev^2
+#eigen_val
+#sum(eigen_val[1:12]) / sum(eigen_val)
+
+
+
+# Now we will do PCA for testing data 
+# Standardize the test data using the mean and sd of the training data
+test_predictors <- test_ev[ , !names(test_ev) %in% c("EV_ADOPT_RATE","med_ev_binary")]
+ev_test_numeric <- test_predictors[, sapply(test_predictors, is.numeric)]
+test_predictors_scaled <- scale(ev_test_numeric, center = attr(train_predictors_scaled, "scaled:center"), scale = attr(train_predictors_scaled, "scaled:scale"))
+
+
+# Transform test data using the PCA object created from the training data
+test_reduced <- predict(ev.pca_result, newdata = test_predictors_scaled)
+test_reduced <- test_reduced[, 1:15]
+
+# We will be using first 15 principal components to deal with our data!
+train_reduced <- ev.pca_result$x[, 1:12]
+
+
+```
+
+```{r}
+
+library(data.table)
+
+
+
+```
+
+
+
+
+```{r}
+
+library(e1071)
+fit_svc = svm(med_ev_binary ~ ., data = train_reduced, kernel = "linear", cost = 0.01)
+summary(fit_svc)
+
+
+
+```
+
+
+
+

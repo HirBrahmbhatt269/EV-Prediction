@@ -1,0 +1,118 @@
+---
+title: "ev_prediction_yiwei"
+author: "Yiwei Wu"
+date: '2024-04-20'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Step 1: Load the data and find mean and median of ev adoption rate
+```{r}
+
+ev_data <- read.csv("ev_adoption_data_final.csv")
+ev_no_zero <- ev_data[ev_data$EV_ADOPT_RATE > 0, ]
+ev_med <- median(ev_no_zero$EV_ADOPT_RATE)
+ev_mean <- mean(ev_no_zero$EV_ADOPT_RATE)
+
+```
+
+Step 2: Create dummy variables
+```{r}
+
+med_ev_binary <- rep(0, dim(ev_data)[1])
+med_ev_binary[ev_data$EV_ADOPT_RATE >= ev_med] = 1
+ev_median <- cbind(ev_data, med_ev_binary)
+
+library(dplyr)
+ev_median <- select(ev_median, -ZIPCODE)
+
+
+
+
+```
+
+
+
+Step 3: 
+```{r}
+
+#library(caTools)
+
+#split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+
+
+#ev_train = subset(ev_median, split==TRUE)
+#ev_test = subset(ev_median, split == FALSE)
+
+#train.indx <- createDataPartition(ev_median$EV_ADOPT_RATE, p = 0.8, list = FALSE)
+#train_ev <- ev_median[train.indx, ]
+#test_ev <- ev_median[-train.indx, ]
+
+#library(rsample)
+#split <- initial_split(ev_train, prop = 0.75, strata = "EV_ADOPT_RATE")
+#train_set <- training(split)
+#test_set <- testing(split)
+set.seed(42)
+train.indx <- createDataPartition(ev_median$med_ev_binary, p = 0.8, list = FALSE)
+train_ev <- ev_median[train.indx, ]
+test_ev <- ev_median[-train.indx, ]
+
+
+
+```
+
+Fit a support vector classifier
+```{r}
+library(e1071)
+fit_svc = svm(med_ev_binary ~ ., data = train_ev, kernel = "linear", cost = 0.01)
+summary(fit_svc)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+
+linear kernal
+```{r}
+tune.out = tune(svm,EV_ADOPT_RATE~ ., data = train_ev, kernal = "linearl", ranges = list(cost=seq(0.1,10,by = 0.1)))
+summary(tune.out)
+
+
+
+
+svm.linear = svm(EV_ADOPT_RATE ~ ., kernel = "linear", data = train_ev, cost = tune.out$best.parameters$cost)
+train.pred = predict(svm.linear, ev_train)
+table(train_ev$EV_ADOPT_RATE, train.pred)
+
+svm.linear.test = svm(EV_ADOPT_RATE ~ ., kernel = "linear", data = test_ev, cost = tune.out$best.parameters$cost)
+test.pred = predict(svm.linear.test, test_ev)
+table(test_ev$EV_ADOPT_RATE, test.pred)
+
+
+```
+
+
+radial kernal
+```{r}
+svm_radial = svm(EV_ADOPT_RATE ~ ., kernel = "radial", data = train_ev, cost = 0.1)
+summary(svm_radial)
+
+train.pred = predict(svm_radial, train_ev)
+table(train_ev$EV_ADOPT_RATE, train.pred)
+
+svm.radial.test = svm(EV_ADOPT_RATE ~ ., kernel = "radial", data = test_ev, cost = 0.1)
+test.pred = predict(svm.radial.test, test_ev)
+table(test_ev$EV_ADOPT_RATE, test.pred)
+
+```
