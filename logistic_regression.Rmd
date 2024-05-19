@@ -1,12 +1,58 @@
 ---
 title: "Logistic Regression"
 author: "Hir Brahmbhatt"
-date: "2024-04-20"
+date: "2024-04-03"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+library(corrr)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+library(data.table)
+setDT(df)
+ev_csv <- read.csv("ev_adoption_data_final.csv")
+# Check for the null values
+#colSums(is.na(ev_csv))
+
+
+# Let's split the data into training and testing using stratified sampling
+set.seed(12)
+
+
+# Only choose predictors for PCA
+train_predictors <- ev_csv
+
+
+# Normalizing the data before PCA, we check for the column "ZIPCODE" as it's the only column without numeric data
+# Here, you can change the ev_median data set to training if you wanna do pca only using training data
+ev_numeric <- train_predictors[, sapply(train_predictors, is.numeric)]
+train_predictors_scaled <- scale(ev_numeric)
+
+
+ev.pca_result <- prcomp(train_predictors_scaled, scale. = FALSE, )
+#summary(ev.pca_result)
+fviz_screeplot(ev.pca_result)
+
+# Calculate variance explained by each PC
+eigen_val <- ev.pca_result$sdev^2
+print("Total Variance explained by PCs:")
+sum(eigen_val) / sum(eigen_val)
+
+df <- data.frame(PC_Number = integer(0), Variance = numeric(0) )
+print("First 15 Principal Component and cumulative variance explained by them:")
+for (i in 1:20){
+  #print(sum(eigen_val[1:i]) / sum(eigen_val))
+  df<- rbind(df, data.table(PC_Number = i, Variance = sum(eigen_val[1:i]) / sum(eigen_val)))
+}
+df
+
 ```
 
 
@@ -16,6 +62,7 @@ library(corrr)
 library(ggcorrplot)
 library(FactoMineR)
 library(factoextra)
+library(pROC)
 
 ev_csv <- read.csv("ev_adoption_data_final.csv")
 # Check for the null values
@@ -24,19 +71,21 @@ ev_csv <- read.csv("ev_adoption_data_final.csv")
 
 # To find the median value of EV_ADOPT_RATE without zeros, a dataframe "ev_wo_zero" is created which contains only the non-zeros values of ev adoption rate. Now we will find the cutoff values for mean and median of this non-zero data.
 ev_wo_zero <- ev_csv[ev_csv$EV_ADOPT_RATE > 0, ]
+# Uncomment below sentence to consider all the ev adoption data
+#ev_wo_zero <- ev_csv
 cutoff_med <- median(ev_wo_zero$EV_ADOPT_RATE)
 cutoff_mean <- mean(ev_wo_zero$EV_ADOPT_RATE)
 
 
 # med_ev_binary is a vector which has value "Low" if the ev adoption rate is more than median value of ev_wo_zero$EV_ADOPT_RATE
 med_ev_binary <- rep(0, dim(ev_csv)[1])
-med_ev_binary[ev_csv$EV_ADOPT_RATE >= cutoff_mean] = 1
+med_ev_binary[ev_csv$EV_ADOPT_RATE >= cutoff_med] = 1
 ev_median <- cbind(ev_csv, med_ev_binary)
 
 
 # Let's split the data into training and testing using stratified sampling
 set.seed(1234)
-train.indx <- createDataPartition(ev_median$EV_ADOPT_RATE, p = 0.8, list = FALSE)
+train.indx <- createDataPartition(ev_median$med_ev_binary, p = 0.8, list = FALSE)
 train_ev <- ev_median[train.indx, ]
 test_ev <- ev_median[-train.indx, ]
 
@@ -55,12 +104,6 @@ ev.pca_result <- prcomp(train_predictors_scaled, scale. = FALSE, )
 #summary(ev.pca_result)
 fviz_screeplot(ev.pca_result)
 
-# Calculate variance explained by each PC
-#eigen_val <- ev.pca_result$sdev^2
-#eigen_val
-#sum(eigen_val[1:12]) / sum(eigen_val)
-
-
 
 # Now we will do PCA for testing data 
 # Standardize the test data using the mean and sd of the training data
@@ -71,7 +114,7 @@ test_predictors_scaled <- scale(ev_test_numeric, center = attr(train_predictors_
 
 # Transform test data using the PCA object created from the training data
 test_reduced <- predict(ev.pca_result, newdata = test_predictors_scaled)
-test_reduced <- test_reduced[, 1:15]
+test_reduced <- test_reduced[, 1:12]
 
 # We will be using first 15 principal components to deal with our data!
 train_reduced <- ev.pca_result$x[, 1:12]
@@ -94,7 +137,146 @@ logit.prob[predictions > 0.5] = 1
 
 # Confusion Matrix
 table(logit.prob, test_ev$med_ev_binary)
-mean(logit.prob == test_ev$med_ev_binary)
+mean(logit.prob != test_ev$med_ev_binary)
+
+
+roc_score=roc(test_ev$med_ev_binary, logit.prob) #AUC score
+plot(roc_score ,main ="ROC curve - PCs- Logistic Regression ")
+
+```
+```{r}
+
+set.seed(1)
+library(leaps)
+
+
+
+# Taking only the numeric columns
+ev_num <- ev_csv[, sapply(ev_csv, is.numeric)]
+
+wo_zero <- ev_num[ev_num$EV_ADOPT_RATE > 0, ]
+# Uncomment below sentence to consider all the ev adoption data
+#wo_zero <- ev_csv
+cutoff_med <- median(wo_zero$EV_ADOPT_RATE)
+cutoff_mean <- mean(wo_zero$EV_ADOPT_RATE)
+cutoff_mean
+
+# Now binding for classification
+med_ev <- rep(0, dim(ev_num)[1])
+med_ev[ev_num$EV_ADOPT_RATE >= cutoff_mean] = 1
+ev_med <- cbind(ev_num, med_ev)
+
+
+# training data
+train.split <- createDataPartition(ev_med$med_ev, p = 0.8, list = FALSE)
+training <- ev_med[train.split, ]
+testing <- ev_med[-train.split, ]
+
+
+# Forward subset selection
+reg.fit <- regsubsets( EV_ADOPT_RATE ~ ., data = ev_num, nvmax = 10, method= "forward")
+reg.summary <- summary(reg.fit)
+
+
+par(mfrow = c(2, 2))
+plot(reg.summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l")
+points(which.min(reg.summary$cp), reg.summary$cp[which.min(reg.summary$cp)], col = "red", cex = 2, pch = 20)
+print("The forward subset selection Coefficients according to Cp...")
+which.min(reg.summary$cp)
+coef(reg.fit, which.min(reg.summary$cp))
+
+plot(reg.summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+points(which.min(reg.summary$bic), reg.summary$bic[which.min(reg.summary$bic)], col = "red", cex = 2, pch = 20)
+print("The forward subset selection Coefficients according to BIC...")
+which.min(reg.summary$bic)
+coef(reg.fit,which.min(reg.summary$bic))
+
+plot(reg.summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted R-square", type = "l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], col = "red", cex = 2, pch = 20)
+print("The forward subset selection Coefficients according to adjusted r-square...")
+which.max(reg.summary$adjr2)
+coef(reg.fit, which.max(reg.summary$adjr2))
+mtext("The forward subset selection graphs for Cp, BIC and Adjusted R-square", outer = TRUE, line = -1)
+
+
+
+# Backward subset selection
+reg.fit <- regsubsets( EV_ADOPT_RATE ~ ., data = ev_num, nvmax = 10, method= "backward")
+reg.summary <- summary(reg.fit)
+
+par(mfrow = c(2, 2))
+plot(reg.summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l")
+points(which.min(reg.summary$cp), reg.summary$cp[which.min(reg.summary$cp)], col = "red", cex = 2, pch = 20)
+print("The backward subset selection Coefficients according to Cp...")
+which.min(reg.summary$cp)
+coef(reg.fit, which.min(reg.summary$cp))
+
+plot(reg.summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+points(which.min(reg.summary$bic), reg.summary$bic[which.min(reg.summary$bic)], col = "red", cex = 2, pch = 20)
+print("The backward subset selection Coefficients according to BIC...")
+which.min(reg.summary$bic)
+coef(reg.fit,which.min(reg.summary$bic))
+
+plot(reg.summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted R-square", type = "l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], col = "red", cex = 2, pch = 20)
+print("The backward subset selection Coefficients according to adjusted r-square...")
+which.max(reg.summary$adjr2)
+coef(reg.fit, which.max(reg.summary$adjr2))
+mtext("The backward subset selection graphs for Cp, BIC and Adjusted R-square", outer = TRUE, line = -1)
+
+
+print("***************************************************")
+
+# logistic regression => You can change the variable list below to get result of different models based on Cp, BIC and adjusted R^2
+log_model <- glm(response ~  TP_MED_AGE + INDUS_AGRI + INDUS_EDU + RACE_1NHPI_Other + OCCU_PRO + BACH_HIGH, data = data.frame(training, response = training$med_ev), family = binomial()) # Forward - BIC
+
+
+# Selected Variables from lasso method (Lasso's code in the next code block)
+#log_model <- glm(response ~  TP_SEX_RATIO + TP_5Y_UND + TP_10Y_14Y + TP_25Y_34Y + TP_84Y_OVR + TP_MED_AGE + RACE_1AI_AN_TOTAL + RACE_1AI_AN_Chippewa + RACE_1AI_AN_Sioux + RACE_1ASIAN_TOTAL + RACE_1ASIAN_AsianIndian + RACE_1ASIAN_Chinese + RACE_1ASIAN_Filipino + RACE_1ASIAN_Japanese + RACE_1ASIAN_Korean + RACE_1NHPI_NativeHawaiian + RACE_1NHPI_Other + RACE_2._BLACK.AI_AN + ETHN_NOT.HISP.LAT_White + ETHN_NOT.HISP.LAT_AI_AN + ETHN_NOT.HISP.LAT_2.Other + INC_HH_10.15 + INC_HH_15.25 + INC_HH_25.35 + INC_HH_200. + OCCU_SEV + GRAD_PRO  + INDUS_AGRI + INDUS_MANU + INDUS_INFO + INDUS_PROF + INDUS_ARTS + INDUS_PUBLIC_ADMIN + NO_VEHICLES + TWO_VEHICLES, data = data.frame(training, response = training$med_ev), family = binomial())
+
+summary(log_model)
+
+# Evaluate model on the test set
+test_predict <- predict(log_model, newdata = data.frame(testing), type = "response")
+#predictions
+
+
+# logistic predictions
+log.prob <- rep(0, dim(testing)[1])
+log.prob[test_predict > 0.5] = 1
+
+# Confusion Matrix
+print("Variable Selection by Lasso")
+table(log.prob, testing$med_ev)
+mean(log.prob != testing$med_ev)
+mean(log.prob == testing$med_ev)
+
+
+#roc_score=roc(testing$med_ev, log.prob) #AUC score
+#plot(roc_score ,main ="ROC curve - Lasso - Logistic Regression ")
+
+```
+```{r}
+# Because we are getting linear dependencies, we can use lasso to see which are important variables.
+library(glmnet)
+set.seed(7)
+
+# Removing the response variable's different versions + Dummy population change
+ev_input <- as.matrix(ev_num[, !names(ev_num) %in% c("EV_ADOPT_RATE", "total_ev_count", "DUMMY_POP_CHANGE","")])
+ev_response <- ev_num$EV_ADOPT_RATE
+lasso_model <- glmnet(ev_input, ev_response, alpha = 1)
+
+# Perform cross-validation
+cv_lasso <- cv.glmnet(ev_input, ev_response, alpha = 1)
+
+# Plot the cross-validation results
+plot(cv_lasso)
+
+cv_lasso$lambda.min
+
+# Get coefficients at the optimal lambda
+lasso_coef <- coef(cv_lasso, s = "lambda.min")
+print(lasso_coef)
 
 
 ```
